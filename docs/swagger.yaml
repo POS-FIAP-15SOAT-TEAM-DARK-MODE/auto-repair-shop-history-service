@@ -1,0 +1,199 @@
+openapi: 3.0.0
+info:
+  title: Auto-Repair-Shop History & Reporting API
+  version: "1.0.0"
+  description: OpenAPI specification of the History & Reporting service. Contains the read endpoints of the service order history and the execution report.
+servers:
+  - url: http://localhost:{PORT}
+    description: Local development server
+    variables:
+      PORT:
+        default: "8085"
+        description: Port number for the server
+security:
+  - SessionToken: []
+paths:
+  /ping:
+    get:
+      summary: Ping the API
+      tags:
+        - Health
+      security: []
+      responses:
+        "200":
+          description: Successful ping
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: pong
+  /v1/service-order/{id}/history:
+    get:
+      summary: Get service order history
+      description: Returns the status transitions of a service order in chronological order. The entry whose newStatus is IN_PROGRESS carries workTransitions, grouped by work in order of first appearance. Entries of other statuses have no workTransitions field. An unknown service order returns an empty array.
+      tags:
+        - Service Order History
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Service order id (ULID)
+      responses:
+        "200":
+          description: Chronological list of transitions. Empty array when the service order has no history.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceOrderHistoryEntry"
+              example:
+                - previousStatus: ""
+                  newStatus: NEW
+                  createdAt: "2026-11-01T11:59:00Z"
+                - previousStatus: IN_DIAGNOSIS
+                  newStatus: IN_PROGRESS
+                  createdAt: "2026-11-01T12:00:00Z"
+                  workTransitions:
+                    - workId: 11111111-1111-4111-8111-000000000001
+                      status:
+                        - previousStatus: AWAITING_START
+                          newStatus: IN_PROGRESS
+                          createdAt: "2026-11-01T12:00:00Z"
+                        - previousStatus: IN_PROGRESS
+                          newStatus: COMPLETED
+                          createdAt: "2026-11-01T12:30:00Z"
+        "401":
+          description: Unauthorized (missing or invalid JWT)
+        "403":
+          description: Forbidden (insufficient permissions)
+        "422":
+          description: Service order id is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/reports/average-execution-time:
+    get:
+      summary: Get average work execution time
+      description: Returns the average time, in hours, between each work's IN_PROGRESS and COMPLETED transitions across all service orders, ordered by work name. Works without a completed execution are omitted.
+      tags:
+        - Reports
+      parameters:
+        - in: query
+          name: work_id
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by one or more work ids. Repeat the parameter for multiple values (?work_id=id1&work_id=id2). Omit to return all works.
+      responses:
+        "200":
+          description: Works with their average execution time. Empty array when no work has been completed yet.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkExecutionTimeResponse"
+              example:
+                - workId: 11111111-1111-4111-8111-000000000001
+                  workName: Troca de óleo
+                  averageExecutionTimeHours: 1.5
+        "401":
+          description: Unauthorized (missing or invalid JWT)
+        "403":
+          description: Forbidden (insufficient permissions)
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  securitySchemes:
+    SessionToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    WorkStatusEntry:
+      type: object
+      properties:
+        previousStatus:
+          type: string
+          description: Previous status of the work; empty when there was none
+        newStatus:
+          type: string
+          example: IN_PROGRESS
+        createdAt:
+          type: string
+          format: date-time
+    WorkTransitionGroup:
+      type: object
+      properties:
+        workId:
+          type: string
+          format: uuid
+        status:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkStatusEntry"
+    ServiceOrderHistoryEntry:
+      type: object
+      properties:
+        previousStatus:
+          type: string
+          description: Previous service order status; empty for the first transition
+        newStatus:
+          type: string
+          example: IN_PROGRESS
+        createdAt:
+          type: string
+          format: date-time
+        workTransitions:
+          type: array
+          description: Present only on the IN_PROGRESS entry
+          items:
+            $ref: "#/components/schemas/WorkTransitionGroup"
+    WorkExecutionTimeResponse:
+      type: object
+      properties:
+        workId:
+          type: string
+          format: uuid
+          description: Work identifier
+        workName:
+          type: string
+          description: Name of the billable service
+        averageExecutionTimeHours:
+          type: number
+          format: double
+          description: Average time in hours from IN_PROGRESS to COMPLETED across all service orders
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+        code:
+          type: integer
+          description: HTTP status code
+        errors:
+          type: array
+          items:
+            type: string
