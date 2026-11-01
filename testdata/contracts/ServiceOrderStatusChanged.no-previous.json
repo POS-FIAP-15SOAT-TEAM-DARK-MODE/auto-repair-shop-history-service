@@ -1,0 +1,9 @@
+{
+  "message_id": "c8b2d7e1-3a75-4f7f-8b5a-1e6c2c0f2d22",
+  "saga_id": "0f3c9a2e-6a1d-4a53-8a6e-5d3b1f2c7e90",
+  "type": "ServiceOrderStatusChanged",
+  "occurred_at": "2026-11-01T11:59:00Z",
+  "service_order_id": "01JD8Z4R3Q8M2V7K5N9XWABCDE",
+  "request_id": "2c5e1f0a-9d77-4b2c-a0c1-3f8e6b7d1a22",
+  "payload": {"previous": null, "new": "NEW", "reason": null, "total_amount": "0.00"}
+}

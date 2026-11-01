@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: history-service-config
+  labels:
+    app: history-service
+# Non-sensitive runtime config. DYNAMODB_TABLE and HISTORY_QUEUE_URL are environment-specific: the deploy workflow
+# (docker.yml, "Resolve messaging endpoints") patches them after `kubectl apply -k`.
+data:
+  PORT: "8085"
+  LOG_LEVEL: "INFO"
+  AWS_REGION: "us-east-1"
+  DYNAMODB_TABLE: "REPLACE_BY_PIPELINE"
+  HISTORY_QUEUE_URL: "REPLACE_BY_PIPELINE"
