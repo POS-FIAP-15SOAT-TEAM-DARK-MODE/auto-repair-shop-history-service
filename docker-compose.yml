@@ -1,0 +1,42 @@
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    ports:
+      - "${PORT:-8085}:${PORT:-8085}"
+    depends_on:
+      aws-init:
+        condition: service_completed_successfully
+    networks: [backend]
+
+  ministack:
+    image: ministackorg/ministack
+    ports:
+      - "4566:4566"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4566/ >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  aws-init:
+    image: amazon/aws-cli
+    entrypoint: ["/bin/sh", "/init/init-aws.sh"]
+    volumes:
+      - ./local:/init
+    environment:
+      AWS_ENDPOINT_URL: http://ministack:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    depends_on:
+      ministack:
+        condition: service_healthy
+    networks: [backend]
+
+networks:
+  backend:

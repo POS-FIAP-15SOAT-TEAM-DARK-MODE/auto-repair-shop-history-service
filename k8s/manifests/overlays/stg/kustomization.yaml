@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: auto-repair-shop
+
+# The Secret is produced by the External Secrets Operator from Secrets Manager (secrets.yaml).
+resources:
+  - ../../base
+  - secrets.yaml
+
+components:
+  - ../../components/observability
+
+# Image published to ECR. The pipeline overrides newTag with the commit SHA.
+images:
+  - name: auto-repair-shop-history-service
+    newName: 000000000000.dkr.ecr.us-east-1.amazonaws.com/auto-repair-shop-history-service
+    newTag: latest
+
+patches:
+  - path: patch-hpa.yaml
+    target:
+      kind: HorizontalPodAutoscaler
+      name: history-service
