@@ -40,11 +40,7 @@ func MapHistory(entries []HistoryEntry) []HistoryDTO {
 		for _, g := range e.WorkTransitions {
 			statuses := make([]WorkStatusEntryDTO, 0, len(g.Status))
 			for _, s := range g.Status {
-				statuses = append(statuses, WorkStatusEntryDTO{
-					PreviousStatus: s.PreviousStatus,
-					NewStatus:      s.NewStatus,
-					CreatedAt:      s.CreatedAt,
-				})
+				statuses = append(statuses, WorkStatusEntryDTO(s))
 			}
 			dto.WorkTransitions = append(dto.WorkTransitions, WorkTransitionDTO{WorkID: g.WorkID, Status: statuses})
 		}
@@ -57,11 +53,7 @@ func MapHistory(entries []HistoryEntry) []HistoryDTO {
 func MapReport(entries []ReportEntry) []ReportDTO {
 	out := make([]ReportDTO, 0, len(entries))
 	for _, e := range entries {
-		out = append(out, ReportDTO{
-			WorkID:                    e.WorkID,
-			WorkName:                  e.WorkName,
-			AverageExecutionTimeHours: e.AverageExecutionTimeHours,
-		})
+		out = append(out, ReportDTO(e))
 	}
 	return out
 }
