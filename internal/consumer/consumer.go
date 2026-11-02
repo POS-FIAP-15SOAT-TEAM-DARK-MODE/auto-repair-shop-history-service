@@ -48,7 +48,7 @@ func (c *Consumer) Run(ctx context.Context) error {
 			if ctx.Err() != nil {
 				break
 			}
-			logger.Global().Error(err, zap.String("component", "sqs-consumer"))
+			logger.Of(ctx).ErrorEvent("queue.receive_failed", err, zap.String("component", "sqs-consumer"))
 			select {
 			case <-ctx.Done():
 			case <-time.After(time.Second):
@@ -56,30 +56,46 @@ func (c *Consumer) Run(ctx context.Context) error {
 			continue
 		}
 		for _, m := range msgs {
-			if err := c.Handle(ctx, m); err != nil {
-				logger.Global().Error(err, zap.String("component", "sqs-consumer"))
-			}
+			// Handle logs its own failures, with the message fields in the context.
+			_ = c.Handle(ctx, m)
 		}
 	}
 	return nil
 }
 
-// Handle processes one SQS message. A non-nil error means the message must stay in the queue.
+// Handle processes one SQS message. A non-nil error means the message must stay in the queue. Every failure is logged
+// here, once, with the message_id, saga_id and service_order_id of the envelope in the logger context.
 func (c *Consumer) Handle(ctx context.Context, m messaging.Message) error {
 	env, err := messaging.Decode([]byte(m.Body))
 	if err != nil {
-		return fmt.Errorf("decode message: %w", err)
+		err = fmt.Errorf("decode message: %w", err)
+		logger.Of(ctx).ErrorEvent("message.invalid", err, zap.String("component", "sqs-consumer"))
+		return err
 	}
+	ctx = logger.WithFields(ctx,
+		zap.String("message_id", env.MessageID),
+		zap.String("saga_id", env.SagaID),
+		zap.String("service_order_id", env.ServiceOrderID),
+	)
 
 	if err := c.apply(ctx, env); err != nil {
-		if errors.Is(err, store.ErrDuplicateMessage) {
-			logger.Global().Info("duplicate message ignored",
-				zap.String("message_id", env.MessageID), zap.String("type", env.Type))
-		} else {
-			return fmt.Errorf("apply %s: %w", env.Type, err)
+		if !errors.Is(err, store.ErrDuplicateMessage) {
+			err = fmt.Errorf("apply %s: %w", env.Type, err)
+			logger.Of(ctx).ErrorEvent("message.failed", err,
+				zap.String("type", env.Type), zap.String("component", "sqs-consumer"))
+			return err
 		}
+		logger.Of(ctx).Info("message.duplicate", zap.String("type", env.Type))
+	} else {
+		logger.Of(ctx).Info("message.applied", zap.String("type", env.Type))
 	}
-	return c.queue.DeleteMessage(ctx, c.queueURL, m.ReceiptHandle)
+
+	if err := c.queue.DeleteMessage(ctx, c.queueURL, m.ReceiptHandle); err != nil {
+		err = fmt.Errorf("delete message: %w", err)
+		logger.Of(ctx).ErrorEvent("message.delete_failed", err, zap.String("component", "sqs-consumer"))
+		return err
+	}
+	return nil
 }
 
 // apply routes by type. Unknown types are logged and treated as applied so they are removed from the queue.
@@ -98,8 +114,8 @@ func (c *Consumer) apply(ctx context.Context, env messaging.Envelope) error {
 		}
 		return c.store.WriteWorkEvent(ctx, e)
 	default:
-		logger.Global().Warn("unhandled message type, discarding",
-			zap.String("type", env.Type), zap.String("message_id", env.MessageID))
+		logger.Of(ctx).Warn("message.discarded",
+			zap.String("type", env.Type), zap.String("reason", "unhandled_type"))
 		return nil
 	}
 }
