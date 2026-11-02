@@ -20,7 +20,4 @@ up:
 down:
 	docker compose down -v
 
-mockgen:
-	go generate ./...
-
-.PHONY: run test test-integration coverage up down mockgen
+.PHONY: run test test-integration coverage up down
