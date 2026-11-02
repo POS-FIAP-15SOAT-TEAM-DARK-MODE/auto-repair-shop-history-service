@@ -7,12 +7,18 @@ import (
 	"testing"
 
 	"github.com/POS-FIAP-15SOAT-TEAM-DARK-MODE/auto-repair-shop-history-service/internal/app"
+	"github.com/POS-FIAP-15SOAT-TEAM-DARK-MODE/auto-repair-shop-history-service/internal/consumer"
 	"github.com/POS-FIAP-15SOAT-TEAM-DARK-MODE/auto-repair-shop-history-service/internal/history"
+	jsonv2 "github.com/POS-FIAP-15SOAT-TEAM-DARK-MODE/auto-repair-shop-history-service/internal/pkg/json"
+	"github.com/POS-FIAP-15SOAT-TEAM-DARK-MODE/auto-repair-shop-history-service/internal/pkg/messaging"
 	"github.com/stretchr/testify/assert"
 )
 
 // sensitive mimics a driver message that must never reach a response body.
 const sensitive = `pq: duplicate key value violates unique constraint "x" (value)`
+
+// rootCause is an infrastructure error used as the unknown leaf of joins.
+var rootCause = errors.New(sensitive)
 
 func TestErrorMapsServiceOrderIDRequiredTo422(t *testing.T) {
 	status, body := Error(history.ErrServiceOrderIDRequired)
@@ -81,11 +87,83 @@ func TestErrorDefaultsTo500WithoutRootCause(t *testing.T) {
 	assert.Empty(t, body.Errors)
 }
 
-func TestPublicMessageForConflictStatuses(t *testing.T) {
+func TestBuildMessagesForConflictStatus(t *testing.T) {
 	// No error maps to 409 today; the generic text is pinned so a future mapping cannot leak the cause.
-	assert.Equal(t, "conflict", publicMessage(app.ErrDataConflict, http.StatusConflict))
-	assert.Equal(t, "conflict", publicMessage(fmt.Errorf("x: %w", app.ErrInfraConflict), http.StatusConflict))
-	assert.Equal(t, "internal server error", publicMessage(errors.New(sensitive), http.StatusBadGateway))
+	_, msg := buildErrorMessages(app.ErrDataConflict, http.StatusConflict)
+	assert.Equal(t, "conflict", msg)
+	_, msg = buildErrorMessages(fmt.Errorf("x: %w", app.ErrInfraConflict), http.StatusConflict)
+	assert.Equal(t, "conflict", msg)
+	_, msg = buildErrorMessages(rootCause, http.StatusBadGateway)
+	assert.Equal(t, "internal server error", msg)
+}
+
+func TestValidationSentinelAnswers400WithItsText(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"consumer invalid payload", consumer.ErrInvalidPayload, "invalid message payload"},
+		{"consumer invalid payload wrapped", fmt.Errorf("%w: new is required", consumer.ErrInvalidPayload), "invalid message payload"},
+		{"envelope", messaging.ErrInvalidEnvelope, "invalid message envelope"},
+		{"json syntax", jsonv2.ErrJSONSyntax, "invalid JSON syntax"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			status, body := Error(tc.err)
+			assert.Equal(t, http.StatusBadRequest, status)
+			assert.Equal(t, http.StatusBadRequest, body.StatusCode)
+			assert.Empty(t, body.Error)
+			assert.Equal(t, []string{tc.want}, body.Errors)
+		})
+	}
+}
+
+func TestJoinOfValidationSentinelsAnswers400WithOnlySentinelTexts(t *testing.T) {
+	status, body := Error(errors.Join(consumer.ErrInvalidPayload, messaging.ErrInvalidEnvelope))
+	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Empty(t, body.Error)
+	assert.Equal(t, []string{"invalid message payload", "invalid message envelope"}, body.Errors)
+}
+
+func TestValidationListKeepsOnlySentinelTexts(t *testing.T) {
+	// The driver text is only in the message of a %s argument, not in the wrap chain: the sentinel alone is the leaf.
+	status, body := Error(fmt.Errorf("%w: %s", consumer.ErrInvalidPayload, sensitive))
+	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Equal(t, []string{"invalid message payload"}, body.Errors)
+	assert.NotContains(t, fmt.Sprint(body.Errors), "pq:")
+}
+
+func TestInfraCauseJoinedWithValidationIsGeneric500(t *testing.T) {
+	// The rule: a join that contains any infrastructure or unknown leaf answers a generic 500, never 400.
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{"validation joined with infra", errors.Join(consumer.ErrInvalidPayload, rootCause)},
+		{"validation %w-wrapped with infra", fmt.Errorf("%w: %w", consumer.ErrInvalidPayload, rootCause)},
+		{"json syntax joined with infra", errors.Join(jsonv2.ErrJSONSyntax, rootCause)},
+		{"two unknown causes", errors.Join(errors.New("a"), rootCause)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			status, body := Error(tc.err)
+			assert.Equal(t, http.StatusInternalServerError, status)
+			assert.Equal(t, http.StatusInternalServerError, body.StatusCode)
+			assert.Equal(t, "internal server error", body.Error)
+			assert.Empty(t, body.Errors)
+			assert.NotContains(t, body.Error, "pq:")
+			assert.NotContains(t, body.Error, "unique constraint")
+		})
+	}
+}
+
+func TestDomainJoinedWithInfraKeepsDomainMessage(t *testing.T) {
+	status, body := Error(errors.Join(history.ErrServiceOrderIDRequired, rootCause))
+	assert.Equal(t, http.StatusUnprocessableEntity, status)
+	assert.Equal(t, "service order id is required", body.Error)
+	assert.Empty(t, body.Errors)
+	assert.NotContains(t, body.Error, "pq:")
 }
 
 func TestShouldLog(t *testing.T) {
@@ -94,10 +172,12 @@ func TestShouldLog(t *testing.T) {
 		err  error
 		want bool
 	}{
-		{"unknown error (500)", errors.New(sensitive), true},
+		{"unknown error (500)", rootCause, true},
 		{"infra data violation (422)", fmt.Errorf("x: %w", app.ErrDataViolation), true},
 		{"infra data conflict", fmt.Errorf("x: %w", app.ErrDataConflict), true},
 		{"infra conflict", app.ErrInfraConflict, true},
+		{"validation joined with infra (500)", errors.Join(consumer.ErrInvalidPayload, rootCause), true},
+		{"pure validation (400)", consumer.ErrInvalidPayload, false},
 		{"domain error (422)", history.ErrServiceOrderIDRequired, false},
 	}
 	for _, tt := range tests {
@@ -105,4 +185,11 @@ func TestShouldLog(t *testing.T) {
 			assert.Equal(t, tt.want, ShouldLog(tt.err))
 		})
 	}
+}
+
+func TestLeavesFlattensJoinsAndWraps(t *testing.T) {
+	joined := errors.Join(consumer.ErrInvalidPayload, fmt.Errorf("ctx: %w", rootCause))
+	assert.Len(t, leaves(joined), 2)
+	assert.Nil(t, leaves(nil))
+	assert.True(t, errors.Is(leaves(fmt.Errorf("ctx: %w", consumer.ErrInvalidPayload))[0], consumer.ErrInvalidPayload))
 }
