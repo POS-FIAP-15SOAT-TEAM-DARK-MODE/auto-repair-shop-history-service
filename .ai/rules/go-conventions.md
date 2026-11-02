@@ -1,6 +1,6 @@
 # Go conventions
 
-- Go 1.26, module `github.com/POS-FIAP-15SOAT-TEAM-DARK-MODE/auto-repair-shop-history-service`.
+- Go 1.27, module `github.com/POS-FIAP-15SOAT-TEAM-DARK-MODE/auto-repair-shop-history-service`.
 - Errors: wrap with `%w`; sentinel errors are package-level `var`. `store.ErrDuplicateMessage` is the only sentinel the
   consumer branches on.
 - Times: UTC, RFC 3339. Envelope timestamps are the business time; never use the processing clock for business data.
