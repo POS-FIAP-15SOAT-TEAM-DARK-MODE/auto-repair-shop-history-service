@@ -112,16 +112,15 @@ func isValidationError(err error) bool {
 	return len(validationMessages(err)) > 0
 }
 
-// validationMessages returns the texts of the validation sentinels that err matches, but only when every leaf of err
-// is one of them. A leaf is a cause with no further wrapped error. If any leaf is an infrastructure or unknown
-// error (even one joined with a validation sentinel), err is not a validation error and nil is returned, so the
-// client gets a generic answer and the full error goes to the log.
+// validationMessages returns the texts of the validation sentinels matched by the leaves of err. Any other cause in
+// the same error (an infrastructure or unknown leaf, even one joined with a validation sentinel) is never included:
+// only the sentinel texts reach errors[]. An error with no validation sentinel returns nil.
 func validationMessages(err error) []string {
 	var msgs []string
 	for _, leaf := range leaves(err) {
 		sentinel, ok := matchValidation(leaf)
 		if !ok {
-			return nil
+			continue
 		}
 		if !containsText(msgs, sentinel.Error()) {
 			msgs = append(msgs, sentinel.Error())

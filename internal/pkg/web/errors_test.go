@@ -134,16 +134,15 @@ func TestValidationListKeepsOnlySentinelTexts(t *testing.T) {
 	assert.NotContains(t, fmt.Sprint(body.Errors), "pq:")
 }
 
-func TestInfraCauseJoinedWithValidationIsGeneric500(t *testing.T) {
-	// The rule: a join that contains any infrastructure or unknown leaf answers a generic 500, never 400.
+func TestOnlyInfraOrUnknownCausesAnswerGeneric500(t *testing.T) {
 	cases := []struct {
 		name string
 		err  error
 	}{
-		{"validation joined with infra", errors.Join(consumer.ErrInvalidPayload, rootCause)},
-		{"validation %w-wrapped with infra", fmt.Errorf("%w: %w", consumer.ErrInvalidPayload, rootCause)},
-		{"json syntax joined with infra", errors.Join(jsonv2.ErrJSONSyntax, rootCause)},
+		{"single unknown cause", rootCause},
+		{"unknown wrap", fmt.Errorf("save: %w", rootCause)},
 		{"two unknown causes", errors.Join(errors.New("a"), rootCause)},
+		{"infra wrapped with infra", fmt.Errorf("%w: %w", errors.New("a"), rootCause)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -156,6 +155,37 @@ func TestInfraCauseJoinedWithValidationIsGeneric500(t *testing.T) {
 			assert.NotContains(t, body.Error, "unique constraint")
 		})
 	}
+}
+
+func TestValidationWithInfraAnswers400WithOnlySentinelText(t *testing.T) {
+	// A validation sentinel anywhere in the error gives 400; the driver text must never appear in errors[].
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{"joined with infra", errors.Join(consumer.ErrInvalidPayload, rootCause)},
+		{"%w: %w with infra", fmt.Errorf("%w: %w", consumer.ErrInvalidPayload, rootCause)},
+		{"json syntax joined with infra", errors.Join(jsonv2.ErrJSONSyntax, rootCause)},
+		{"infra wrapped with validation", fmt.Errorf("save: %w", fmt.Errorf("%w: %w", rootCause, consumer.ErrInvalidPayload))},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			status, body := Error(tc.err)
+			assert.Equal(t, http.StatusBadRequest, status)
+			assert.Equal(t, http.StatusBadRequest, body.StatusCode)
+			assert.Empty(t, body.Error)
+			assert.Len(t, body.Errors, 1)
+			assert.NotContains(t, fmt.Sprint(body.Errors), "pq:")
+			assert.NotContains(t, fmt.Sprint(body.Errors), "unique constraint")
+		})
+	}
+}
+
+func TestValidationWithDomainJoinFollowsValidationRule(t *testing.T) {
+	status, body := Error(errors.Join(history.ErrServiceOrderIDRequired, consumer.ErrInvalidPayload))
+	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Empty(t, body.Error)
+	assert.Equal(t, []string{"invalid message payload"}, body.Errors)
 }
 
 func TestDomainJoinedWithInfraKeepsDomainMessage(t *testing.T) {
@@ -176,7 +206,7 @@ func TestShouldLog(t *testing.T) {
 		{"infra data violation (422)", fmt.Errorf("x: %w", app.ErrDataViolation), true},
 		{"infra data conflict", fmt.Errorf("x: %w", app.ErrDataConflict), true},
 		{"infra conflict", app.ErrInfraConflict, true},
-		{"validation joined with infra (500)", errors.Join(consumer.ErrInvalidPayload, rootCause), true},
+		{"validation joined with infra (400)", errors.Join(consumer.ErrInvalidPayload, rootCause), false},
 		{"pure validation (400)", consumer.ErrInvalidPayload, false},
 		{"domain error (422)", history.ErrServiceOrderIDRequired, false},
 	}
