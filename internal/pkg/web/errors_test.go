@@ -17,8 +17,8 @@ import (
 // sensitive mimics a driver message that must never reach a response body.
 const sensitive = `pq: duplicate key value violates unique constraint "x" (value)`
 
-// rootCause is an infrastructure error used as the unknown leaf of joins.
-var rootCause = errors.New(sensitive)
+// errRootCause is an infrastructure error used as the unknown leaf of joins.
+var errRootCause = errors.New(sensitive)
 
 func TestErrorMapsServiceOrderIDRequiredTo422(t *testing.T) {
 	status, body := Error(history.ErrServiceOrderIDRequired)
@@ -93,7 +93,7 @@ func TestBuildMessagesForConflictStatus(t *testing.T) {
 	assert.Equal(t, "conflict", msg)
 	_, msg = buildErrorMessages(fmt.Errorf("x: %w", app.ErrInfraConflict), http.StatusConflict)
 	assert.Equal(t, "conflict", msg)
-	_, msg = buildErrorMessages(rootCause, http.StatusBadGateway)
+	_, msg = buildErrorMessages(errRootCause, http.StatusBadGateway)
 	assert.Equal(t, "internal server error", msg)
 }
 
@@ -139,10 +139,10 @@ func TestOnlyInfraOrUnknownCausesAnswerGeneric500(t *testing.T) {
 		name string
 		err  error
 	}{
-		{"single unknown cause", rootCause},
-		{"unknown wrap", fmt.Errorf("save: %w", rootCause)},
-		{"two unknown causes", errors.Join(errors.New("a"), rootCause)},
-		{"infra wrapped with infra", fmt.Errorf("%w: %w", errors.New("a"), rootCause)},
+		{"single unknown cause", errRootCause},
+		{"unknown wrap", fmt.Errorf("save: %w", errRootCause)},
+		{"two unknown causes", errors.Join(errors.New("a"), errRootCause)},
+		{"infra wrapped with infra", fmt.Errorf("%w: %w", errors.New("a"), errRootCause)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -163,10 +163,10 @@ func TestValidationWithInfraAnswers400WithOnlySentinelText(t *testing.T) {
 		name string
 		err  error
 	}{
-		{"joined with infra", errors.Join(consumer.ErrInvalidPayload, rootCause)},
-		{"%w: %w with infra", fmt.Errorf("%w: %w", consumer.ErrInvalidPayload, rootCause)},
-		{"json syntax joined with infra", errors.Join(jsonv2.ErrJSONSyntax, rootCause)},
-		{"infra wrapped with validation", fmt.Errorf("save: %w", fmt.Errorf("%w: %w", rootCause, consumer.ErrInvalidPayload))},
+		{"joined with infra", errors.Join(consumer.ErrInvalidPayload, errRootCause)},
+		{"%w: %w with infra", fmt.Errorf("%w: %w", consumer.ErrInvalidPayload, errRootCause)},
+		{"json syntax joined with infra", errors.Join(jsonv2.ErrJSONSyntax, errRootCause)},
+		{"infra wrapped with validation", fmt.Errorf("save: %w", fmt.Errorf("%w: %w", errRootCause, consumer.ErrInvalidPayload))},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -189,7 +189,7 @@ func TestValidationWithDomainJoinFollowsValidationRule(t *testing.T) {
 }
 
 func TestDomainJoinedWithInfraKeepsDomainMessage(t *testing.T) {
-	status, body := Error(errors.Join(history.ErrServiceOrderIDRequired, rootCause))
+	status, body := Error(errors.Join(history.ErrServiceOrderIDRequired, errRootCause))
 	assert.Equal(t, http.StatusUnprocessableEntity, status)
 	assert.Equal(t, "service order id is required", body.Error)
 	assert.Empty(t, body.Errors)
@@ -202,11 +202,11 @@ func TestShouldLog(t *testing.T) {
 		err  error
 		want bool
 	}{
-		{"unknown error (500)", rootCause, true},
+		{"unknown error (500)", errRootCause, true},
 		{"infra data violation (422)", fmt.Errorf("x: %w", app.ErrDataViolation), true},
 		{"infra data conflict", fmt.Errorf("x: %w", app.ErrDataConflict), true},
 		{"infra conflict", app.ErrInfraConflict, true},
-		{"validation joined with infra (400)", errors.Join(consumer.ErrInvalidPayload, rootCause), false},
+		{"validation joined with infra (400)", errors.Join(consumer.ErrInvalidPayload, errRootCause), false},
 		{"pure validation (400)", consumer.ErrInvalidPayload, false},
 		{"domain error (422)", history.ErrServiceOrderIDRequired, false},
 	}
@@ -218,7 +218,7 @@ func TestShouldLog(t *testing.T) {
 }
 
 func TestLeavesFlattensJoinsAndWraps(t *testing.T) {
-	joined := errors.Join(consumer.ErrInvalidPayload, fmt.Errorf("ctx: %w", rootCause))
+	joined := errors.Join(consumer.ErrInvalidPayload, fmt.Errorf("ctx: %w", errRootCause))
 	assert.Len(t, leaves(joined), 2)
 	assert.Nil(t, leaves(nil))
 	assert.True(t, errors.Is(leaves(fmt.Errorf("ctx: %w", consumer.ErrInvalidPayload))[0], consumer.ErrInvalidPayload))
