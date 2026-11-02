@@ -58,6 +58,10 @@ func GinHandler[T any](cb func(context.Context, *http2.Request) (T, error)) gin.
 		resp, err := cb(ctx, c.Request)
 		if err != nil {
 			status, errResp := web.Error(err)
+			if web.ShouldLog(err) {
+				// ctx carries the request logger, so the line includes request_id.
+				logger.Of(ctx).Error(err, zap.Int("status", status))
+			}
 			c.JSON(status, errResp)
 			return
 		}
