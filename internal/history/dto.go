@@ -2,7 +2,7 @@ package history
 
 import "time"
 
-// The JSON shapes below are the same as the monolith's (service_order_history/adapters/so_history_read.go).
+// The JSON shapes below are the same as the monolith's history endpoint, so existing clients keep working.
 
 // WorkStatusEntryDTO is a work status change in the history response.
 type WorkStatusEntryDTO struct {
