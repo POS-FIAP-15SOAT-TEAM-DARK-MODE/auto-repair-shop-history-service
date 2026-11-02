@@ -70,10 +70,18 @@ paths:
                           createdAt: "2026-11-01T12:30:00Z"
         "401":
           description: Unauthorized (missing or invalid JWT)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden (insufficient permissions)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "422":
-          description: Service order id is required
+          description: Service order id is required (or, for an infrastructure failure, the generic "invalid data")
           content:
             application/json:
               schema:
@@ -116,8 +124,16 @@ paths:
                   averageExecutionTimeHours: 1.5
         "401":
           description: Unauthorized (missing or invalid JWT)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden (insufficient permissions)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Internal Server Error
           content:
