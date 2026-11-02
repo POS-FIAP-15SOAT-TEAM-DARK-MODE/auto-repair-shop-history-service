@@ -57,7 +57,7 @@ writes nothing and adds nothing to the aggregate.
 | Variable | Purpose | Default |
 |---|---|---|
 | `PORT` | HTTP port | `8085` |
-| `JWT_SECRET` | token validation (secret `auto-repair-shop-<env>/history`) | — |
+| `JWT_SECRET` | token validation (secret `auto-repair-shop-<env>/history`). Unset, the code falls back to the placeholder `your_jwt_secret`: set it in every deployed environment | `your_jwt_secret` |
 | `AWS_REGION` | region | `us-east-1` |
 | `AWS_ENDPOINT_URL` | MiniStack endpoint (local and CI only) | empty |
 | `DYNAMODB_TABLE` | read-model table (required) | — |
@@ -83,8 +83,21 @@ make coverage          # coverage summary
 make test-integration  # needs AWS_ENDPOINT_URL pointing to MiniStack
 ```
 
-CI runs `build`, `unit-tests`, `integration-tests` (MiniStack), `coverage` (80% total without mocks, 90% for `store` and
-`consumer`) and `sonarqube`.
+Measured with `make coverage` on 2026-11-01 (the tree has no generated mocks, so nothing is excluded): total **90.6%**.
+
+| Package | Coverage |
+|---|---|
+| `internal/store` | 100.0% |
+| `internal/consumer` | 100.0% |
+| `internal/history` | 100.0% |
+| `internal/app/middleware`, `internal/app/routing`, `internal/pkg/app` | 100.0% |
+| `internal/pkg/web` | 96.3% |
+| `internal/pkg/logger` | 93.4% |
+| `internal/pkg/messaging` | 46.2% |
+| `cmd/service`, `internal/app`, `internal/app/bootstrap` | 0% (wiring and error variables, no unit tests) |
+
+CI runs `pre-commit`, `build` (`go build`, `go vet` with and without `-tags=integration`), `unit-tests` (race detector),
+`integration-tests` (MiniStack), `coverage` (gate: 80% total, 90% for `store` and `consumer`) and `sonarqube`.
 
 ## Decisions
 
