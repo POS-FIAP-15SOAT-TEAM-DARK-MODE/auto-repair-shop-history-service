@@ -30,6 +30,53 @@ paths:
                   message:
                     type: string
                     example: pong
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      description: Prometheus text exposition. Includes http_request_duration_seconds by method, matched route and status.
+      tags:
+        - Operations
+      security: []
+      responses:
+        "200":
+          description: Metrics in the Prometheus text format
+          content:
+            text/plain:
+              schema:
+                type: string
+  /swagger.yaml:
+    get:
+      summary: OpenAPI specification of this service
+      tags:
+        - Operations
+      security: []
+      responses:
+        "200":
+          description: This document (YAML)
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /swagger/{any}:
+    get:
+      summary: Swagger UI
+      tags:
+        - Operations
+      security: []
+      parameters:
+        - in: path
+          name: any
+          required: true
+          schema:
+            type: string
+          description: Swagger UI asset path (index.html and static files)
+      responses:
+        "200":
+          description: Swagger UI page or static asset
+          content:
+            text/html:
+              schema:
+                type: string
   /v1/service-order/{id}/history:
     get:
       summary: Get service order history
@@ -202,14 +249,16 @@ components:
           description: Average time in hours from IN_PROGRESS to COMPLETED across all service orders
     ErrorResponse:
       type: object
+      description: Every error body carries code. Validation failures (400) carry errors; every other status carries error.
       properties:
         error:
           type: string
-          description: Human-readable error message
+          description: Human-readable error message (401, 403, 422 and 500 responses)
         code:
           type: integer
           description: HTTP status code
         errors:
           type: array
+          description: Texts of the validation errors (400 only). Infrastructure causes are never included.
           items:
             type: string
