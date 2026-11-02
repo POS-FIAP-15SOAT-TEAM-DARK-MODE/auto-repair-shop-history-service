@@ -86,7 +86,8 @@ func TestHistoryRouteEmptyIsArray(t *testing.T) {
 func TestHistoryRouteStoreErrorIsInternalError(t *testing.T) {
 	rec := do(t, newRouter(&routeStore{err: errors.New("dynamo down")}), http.MethodGet, "/v1/service-order/so-1/history", tokenFor(t, auth.ATTENDANT))
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	assert.Contains(t, rec.Body.String(), "dynamo down")
+	assert.JSONEq(t, `{"code":500,"error":"internal server error"}`, rec.Body.String())
+	assert.NotContains(t, rec.Body.String(), "dynamo down")
 }
 
 func TestReportRouteAllowsOnlyAttendantAndAdmin(t *testing.T) {

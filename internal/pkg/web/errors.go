@@ -14,11 +14,38 @@ type errorResponse struct {
 	Error      string   `json:"error,omitempty"`
 }
 
-// Error builds the error body and the HTTP status for err.
+// domainErrors are returned on purpose by the domain: their own message is safe to show to the client.
+var domainErrors = []error{
+	history.ErrServiceOrderIDRequired,
+}
+
+// infraErrors are generic failures of the infrastructure. Their causes never reach the response body.
+var infraErrors = []error{
+	app.ErrDataConflict,
+	app.ErrInfraConflict,
+	app.ErrDataViolation,
+}
+
+// Error builds the error body and the HTTP status for err. The body never carries an infrastructure cause (for
+// example, a Postgres or DynamoDB driver message): only domain errors keep their own message, the rest gets a
+// generic one. The full error goes to the server log (see ShouldLog).
 func Error(err error) (int, errorResponse) {
 	status := getHTTPStatus(err)
-	stacked, msg := buildErrorMessages(err, status)
-	return status, errorResponse{StatusCode: status, Errors: stacked, Error: msg}
+	return status, errorResponse{StatusCode: status, Error: publicMessage(err, status)}
+}
+
+// ShouldLog reports whether err must be written to the server log at error level: every 5xx and the infrastructure
+// 409/422 failures. Domain errors are only debug-logged by the controllers.
+func ShouldLog(err error) bool {
+	if getHTTPStatus(err) >= http.StatusInternalServerError {
+		return true
+	}
+	for _, infra := range infraErrors {
+		if errors.Is(err, infra) {
+			return true
+		}
+	}
+	return false
 }
 
 func getHTTPStatus(err error) int {
@@ -32,18 +59,19 @@ func getHTTPStatus(err error) int {
 	}
 }
 
-// buildErrorMessages returns the innermost message for 422/500, as the monolith does.
-func buildErrorMessages(err error, status int) ([]string, string) {
-	if status == http.StatusInternalServerError || status == http.StatusUnprocessableEntity {
-		root := err
-		for {
-			unwrapped := errors.Unwrap(root)
-			if unwrapped == nil {
-				break
-			}
-			root = unwrapped
+// publicMessage returns the message the client may read for err at status.
+func publicMessage(err error, status int) string {
+	for _, domain := range domainErrors {
+		if errors.Is(err, domain) {
+			return domain.Error()
 		}
-		return nil, root.Error()
 	}
-	return nil, err.Error()
+	switch status {
+	case http.StatusUnprocessableEntity:
+		return "invalid data"
+	case http.StatusConflict:
+		return "conflict"
+	default:
+		return "internal server error"
+	}
 }
