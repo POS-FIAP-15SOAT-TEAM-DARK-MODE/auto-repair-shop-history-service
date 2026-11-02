@@ -23,7 +23,7 @@ func (c *Controller) GetHistory(ctx context.Context, _ *http.Request) ([]History
 	id, _ := ctx.Value("id").(string) //nolint:staticcheck // gin route params are passed as string keys by GinHandler
 	entries, err := c.svc.GetHistory(ctx, id)
 	if err != nil {
-		logger.Of(ctx).Debug("service order history failed",
+		logger.Of(ctx).Debug("history.query_failed",
 			zap.String("operation", "get_service_order_history"), zap.Error(err))
 		return nil, err
 	}
@@ -35,7 +35,7 @@ func (c *Controller) GetAverageExecutionTime(ctx context.Context, req *http.Requ
 	workIDs := req.URL.Query()["work_id"]
 	entries, err := c.svc.GetAverageExecutionTime(ctx, workIDs)
 	if err != nil {
-		logger.Of(ctx).Debug("average execution time failed",
+		logger.Of(ctx).Debug("report.query_failed",
 			zap.String("operation", "get_average_execution_time"), zap.Error(err))
 		return nil, err
 	}

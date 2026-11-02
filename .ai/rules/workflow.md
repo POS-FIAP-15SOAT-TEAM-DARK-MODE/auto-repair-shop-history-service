@@ -2,8 +2,8 @@
 
 ## Conventional Commits
 `<type>(<scope>): <subject>`; types `feat fix refactor test chore docs perf style revert`; subject <= 72 chars,
-lowercase, imperative, no trailing period. Scopes used here: `bootstrap`, `messaging`, `store`, `consumer`, `history`,
-`infra`, `ci`, `docs`.
+lowercase, imperative, no trailing period. Scope = the package or area touched. Scopes used here: `app`, `auth`,
+`bootstrap`, `ci`, `consumer`, `deps`, `docs`, `history`, `id`, `infra`, `messaging`, `middleware`, `store`, `web`.
 
 ## Pre-commit hooks
 Configured in `.pre-commit-config.yaml`: whitespace and YAML checks, `golangci-lint`, `go fmt`, `go build`,

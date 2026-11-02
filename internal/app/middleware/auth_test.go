@@ -21,24 +21,29 @@ func TestAuthMiddleware_TableDriven(t *testing.T) {
 		tokenExpiry      time.Time
 		customHeader     string
 		expectedHTTPCode int
+		// expectedBody is the JSON error body; empty when the request reaches the handler.
+		expectedBody string
 	}{
 		{
 			name:             "missing header",
 			middlewareRoles:  []auth.Role{auth.ADMIN},
 			tokenRoles:       nil,
 			expectedHTTPCode: http.StatusUnauthorized,
+			expectedBody:     `{"code":401,"error":"Unauthorized"}`,
 		},
 		{
 			name:             "malformed header",
 			middlewareRoles:  []auth.Role{auth.ADMIN},
 			customHeader:     "Token abc.def",
 			expectedHTTPCode: http.StatusUnauthorized,
+			expectedBody:     `{"code":401,"error":"Unauthorized"}`,
 		},
 		{
 			name:             "invalid token",
 			middlewareRoles:  []auth.Role{auth.ADMIN},
 			customHeader:     "Bearer not-a-valid.token",
 			expectedHTTPCode: http.StatusUnauthorized,
+			expectedBody:     `{"code":401,"error":"Unauthorized"}`,
 		},
 		{
 			name:             "expired token",
@@ -46,6 +51,7 @@ func TestAuthMiddleware_TableDriven(t *testing.T) {
 			tokenRoles:       []auth.Role{auth.CUSTOMER},
 			tokenExpiry:      time.Now().Add(-time.Hour),
 			expectedHTTPCode: http.StatusUnauthorized,
+			expectedBody:     `{"code":401,"error":"Token expired"}`,
 		},
 		{
 			name:             "roles mismatch",
@@ -53,6 +59,7 @@ func TestAuthMiddleware_TableDriven(t *testing.T) {
 			tokenRoles:       []auth.Role{auth.CUSTOMER},
 			tokenExpiry:      time.Now().Add(time.Hour),
 			expectedHTTPCode: http.StatusForbidden,
+			expectedBody:     `{"code":403,"error":"Forbidden"}`,
 		},
 		{
 			name:             "roles match",
@@ -87,6 +94,11 @@ func TestAuthMiddleware_TableDriven(t *testing.T) {
 			router.ServeHTTP(rec, req)
 
 			assert.Equal(t, tt.expectedHTTPCode, rec.Code)
+			if tt.expectedBody != "" {
+				assert.JSONEq(t, tt.expectedBody, rec.Body.String())
+			} else {
+				assert.Empty(t, rec.Body.String())
+			}
 		})
 	}
 }
