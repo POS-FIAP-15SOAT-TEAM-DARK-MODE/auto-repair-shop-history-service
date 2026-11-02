@@ -16,14 +16,15 @@ func Recovery() gin.HandlerFunc {
 		defer func() {
 			if err := recover(); err != nil {
 				stack := debug.Stack()
-				logger.Of(c).Error(err.(error),
+				// The panic value may not be an error, so it is wrapped instead of asserted.
+				logger.Of(c).Error(fmt.Errorf("panic: %v", err),
 					zap.String("behavior", "[PANIC RECOVERED]"),
 					zap.String("stack", string(stack)),
 				)
 
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-					"error":   "internal server error",
-					"details": fmt.Sprintf("%v", err),
+					"code":  http.StatusInternalServerError,
+					"error": "internal server error",
 				})
 			}
 		}()
@@ -40,16 +41,15 @@ func ErrorHandler() gin.HandlerFunc {
 			return
 		}
 
-		errs := c.Errors.Errors()
-
 		status := c.Writer.Status()
 		if status == http.StatusOK {
 			status = http.StatusInternalServerError
 		}
 
+		// The handler's errors are written to the server log by the logger middleware, never to the client.
 		c.JSON(status, gin.H{
-			"error":   http.StatusText(status),
-			"details": errs,
+			"code":  status,
+			"error": http.StatusText(status),
 		})
 	}
 }
