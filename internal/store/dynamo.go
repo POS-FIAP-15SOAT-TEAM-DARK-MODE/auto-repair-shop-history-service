@@ -81,7 +81,7 @@ func (s *DynamoStore) WriteWorkEvent(ctx context.Context, e WorkEvent) error {
 			return err
 		}
 		if !found {
-			logger.Global().Warn("work completed without start marker, report not updated",
+			logger.Of(ctx).Warn("work.start_marker_missing",
 				zap.String("work_id", e.WorkID), zap.String("message_id", e.MessageID))
 			break
 		}

@@ -16,6 +16,6 @@ func main() {
 	manager.Add(bootstrap.Servers()...)
 
 	if err := manager.Run(context.Background()); err != nil {
-		logger.Global().Fatal("application failed")
+		logger.Global().Fatal("app.failed")
 	}
 }

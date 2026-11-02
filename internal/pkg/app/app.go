@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -46,20 +45,20 @@ func (m *LifecycleManager) Run(ctx context.Context) error {
 
 	select {
 	case <-quit:
-		logger.Global().Info("received shutdown signal")
+		logger.Global().Info("server.signal_received")
 	case <-ctx.Done():
-		logger.Global().Info("context cancelled")
+		logger.Global().Info("server.context_cancelled")
 	}
 
 	// Shutdown process
-	logger.Global().Info("shutting down all servers...")
+	logger.Global().Info("server.shutdown_started")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), m.timeout)
 	defer cancel()
 
 	for _, s := range m.servers {
 		srv := s
 		if err := srv.Stop(shutdownCtx); err != nil {
-			logger.Global().Error(fmt.Errorf("server forced to shutdown: %w", err), zap.String("name", srv.Name()))
+			logger.Global().ErrorEvent("server.shutdown_failed", err, zap.String("name", srv.Name()))
 		}
 	}
 

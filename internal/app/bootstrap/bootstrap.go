@@ -24,12 +24,12 @@ func Servers() []app.Server {
 
 	table := env.GetString("DYNAMODB_TABLE", "")
 	if table == "" {
-		logger.Global().Fatal("invalid configuration", zap.String("missing", "DYNAMODB_TABLE"))
+		logger.Global().Fatal("config.invalid", zap.String("missing", "DYNAMODB_TABLE"))
 	}
 
 	awsCfg, err := messaging.LoadAWSConfig(ctx)
 	if err != nil {
-		logger.Global().Fatal("failed to load AWS config", zap.Error(err))
+		logger.Global().Fatal("aws.config_failed", zap.Error(err))
 	}
 	endpoint := env.GetString("AWS_ENDPOINT_URL", "")
 	st := store.NewDynamoStore(store.NewDynamoDBClient(awsCfg, endpoint), table)
@@ -47,7 +47,7 @@ func Servers() []app.Server {
 func messagingWorkers(awsCfg aws.Config, endpoint string, st store.Store) []app.Server {
 	queueURL := env.GetString("HISTORY_QUEUE_URL", "")
 	if queueURL == "" {
-		logger.Global().Warn("messaging disabled: HISTORY_QUEUE_URL is empty")
+		logger.Global().Warn("messaging.disabled", zap.String("missing", "HISTORY_QUEUE_URL"))
 		return nil
 	}
 

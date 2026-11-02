@@ -22,7 +22,7 @@ func SetupRouter(c *container.HandlersWrapper, m *container.Middlewares) *gin.En
 	router := gin.New()
 
 	for name, mid := range *m {
-		logger.Global().Info("Starting new middleware", zap.String("name", name))
+		logger.Global().Info("middleware.mounted", zap.String("name", name))
 		router.Use(mid)
 	}
 
