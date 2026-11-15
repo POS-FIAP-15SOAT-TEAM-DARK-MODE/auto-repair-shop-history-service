@@ -1,0 +1,14 @@
+# <type>(<scope>): <short description>
+# |<---- max 72 characters ---->|
+#
+# Types: feat | fix | refactor | test | chore | docs | perf | style | revert
+#
+# Scopes: app | auth | bootstrap | ci | consumer | deps | docs | history | id | infra | messaging |
+#         middleware | store | web   (see .ai/rules/workflow.md)
+#
+# --- Examples ---
+# feat(consumer): discard unhandled message types with a warning
+# fix(store): keep the report aggregate on redelivered COMPLETED events
+# refactor(middleware): extract the request id helper
+# test(history): cover the empty history answer
+# chore(deps): update aws sdk

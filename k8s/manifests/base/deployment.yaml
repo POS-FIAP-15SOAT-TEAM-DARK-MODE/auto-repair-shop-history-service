@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: history-service
+  labels:
+    app: history-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: history-service
+  template:
+    metadata:
+      labels:
+        app: history-service
+    spec:
+      serviceAccountName: history-service
+      containers:
+        - name: app
+          # Overridden per overlay via the kustomize `images:` transformer.
+          image: auto-repair-shop-history-service:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8085
+          envFrom:
+            - configMapRef:
+                name: history-service-config
+            - secretRef:
+                name: history-service-secrets
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          # Requests are required for the HPA CPU/memory targets to work.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

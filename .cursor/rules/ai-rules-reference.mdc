@@ -1,0 +1,11 @@
+---
+description: Master AI rules reference — pointer to .ai/. Single source of truth for all coding rules.
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# AI Rules Reference
+
+> **Single source of truth: `.ai/`**
+> Only this file is auto-loaded by Cursor. All linked files must be opened on demand.
+> Never duplicate rule content here. Start from `CLAUDE.md` (always-applied rules and task routing).
